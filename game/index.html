@@ -1,19 +1,166 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<link rel="icon" href="data:,">
+<title>Solmar Bay — Neon Tide | Open-World Crime</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #0b1e33; font-family: "Segoe UI", Verdana, sans-serif; }
+  #game-canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,.8); user-select: none; }
+  .panel { background: rgba(8, 18, 32, .55); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px; backdrop-filter: blur(2px); }
+  #minimap-wrap { position: absolute; top: 14px; left: 14px; padding: 6px; }
+  #minimap { display: block; width: 216px; height: 216px; border-radius: 4px; }
+  #minimap-label { font-size: 11px; letter-spacing: 2px; color: #9fd8ff;
+    text-align: center; margin-top: 4px; font-weight: 700; }
+  #top-right { position: absolute; top: 14px; right: 14px; text-align: right; }
+  #wanted { font-size: 30px; letter-spacing: 4px; color: #ffd23e; line-height: 1;
+    text-shadow: 0 0 10px rgba(255,210,62,.6), 0 1px 3px #000; }
+  #wanted .dim { color: rgba(255,255,255,.28); text-shadow: none; }
+  #cash { margin-top: 6px; font-size: 26px; font-weight: 800; color: #7dff9a;
+    text-shadow: 0 1px 3px #000; }
+  #cash small { font-size: 12px; color: #cfe; font-weight: 600; letter-spacing: 1px; }
+  #clock { margin-top: 2px; font-size: 13px; color: #dfeeff; font-weight: 600; }
+  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    min-width: 380px; max-width: 560px; text-align: center; padding: 8px 16px; }
+  #objective .mission-name { font-size: 12px; letter-spacing: 3px; color: #ffd23e;
+    font-weight: 800; }
+  #objective .mission-text { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  #objective .mission-dist { font-size: 12px; color: #bfe3ff; margin-top: 2px; }
+  #bottom-left { position: absolute; left: 14px; bottom: 14px; width: 260px; padding: 10px 12px; }
+  #health-row { display: flex; align-items: center; gap: 8px; }
+  #health-label { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #ff9d9d; }
+  #health-bar-outer { flex: 1; height: 14px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.35); border-radius: 7px; overflow: hidden; }
+  #health-bar { height: 100%; width: 100%; background: linear-gradient(90deg,#ff5a4e,#ffb84e);
+    transition: width .15s; }
+  #car-health-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  #car-health-label { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #9fd8ff; }
+  #car-health-bar-outer { flex: 1; height: 10px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.35); border-radius: 5px; overflow: hidden; }
+  #car-health-bar { height: 100%; width: 100%; background: linear-gradient(90deg,#4ea8ff,#7dffd8); }
+  #ammo-row { margin-top: 6px; font-size: 14px; font-weight: 700; color: #ffe9a8; }
+  #bottom-right { position: absolute; right: 14px; bottom: 14px; text-align: right;
+    padding: 10px 14px; }
+  #speed { font-size: 44px; font-weight: 900; line-height: 1; color: #fff; }
+  #speed small { font-size: 14px; color: #bfe3ff; font-weight: 700; }
+  #car-name { font-size: 13px; color: #ffd23e; font-weight: 800; letter-spacing: 1px; }
+  #hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 14px; font-weight: 700; padding: 7px 14px; }
+  #toast { position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+    font-size: 20px; font-weight: 900; color: #ffd23e; opacity: 0;
+    transition: opacity .3s; text-align: center; letter-spacing: 1px; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px;
+    margin: -9px 0 0 -9px; display: none; }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff;
+    box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { left: 0; top: 8px; width: 18px; height: 2px; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%); }
+  #wasted { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; background: rgba(20,0,0,.55); z-index: 30; color: #fff; }
+  #wasted .big { font-size: 84px; font-weight: 900; letter-spacing: 12px; color: #ff4e4e;
+    text-shadow: 0 0 30px rgba(255,0,0,.8); }
+  #wasted .sub { font-size: 18px; margin-top: 10px; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(6,20,38,.82), rgba(4,12,24,.88)); z-index: 40; }
+  .overlay.hidden { display: none; }
+  .menu-card { width: 640px; max-width: 92vw; text-align: center; color: #fff; padding: 34px 40px;
+    background: rgba(8, 22, 40, .72); border: 1px solid rgba(255,210,62,.45); border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .menu-card h1 { margin: 0; font-size: 58px; letter-spacing: 6px; color: #ffd23e;
+    text-shadow: 0 0 24px rgba(255,210,62,.55); }
+  .menu-card h2 { margin: 2px 0 0; font-size: 17px; letter-spacing: 7px; color: #7dd8ff;
+    font-weight: 700; }
+  .menu-card p.story { font-size: 15px; line-height: 1.55; color: #dceeff; margin: 18px 0 6px; }
+  .menu-card .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px;
+    text-align: left; font-size: 13px; color: #bfe0ff; margin: 16px auto 4px; width: 480px;
+    max-width: 100%; }
+  .menu-card .controls b { color: #fff; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 12px 6px 0;
+    padding: 12px 30px; font-size: 17px; font-weight: 800; letter-spacing: 1px; color: #08131f;
+    background: linear-gradient(180deg, #ffe27a, #ffb52e); border: none; border-radius: 8px;
+    box-shadow: 0 4px 0 #a86f00; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
+  .btn.secondary { background: linear-gradient(180deg, #dfeeff, #9fc4e8); box-shadow: 0 4px 0 #4a6a8a; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #0b1e33; color: #9fd8ff; font-size: 18px; letter-spacing: 2px; z-index: 50; }
+  #fps { position: absolute; left: 14px; bottom: 118px; font-size: 11px; color: rgba(255,255,255,.55);
+    display: none; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<div id="loading">LOADING SOLMAR BAY…</div>
+<canvas id="game-canvas"></canvas>
+<div id="hud">
+  <div id="minimap-wrap" class="panel"><canvas id="minimap" width="216" height="216"></canvas>
+    <div id="minimap-label">SOLMAR BAY</div></div>
+  <div id="top-right">
+    <div id="wanted"></div>
+    <div id="cash"><small>CASH</small> $0</div>
+    <div id="clock">DAY 1 &nbsp;·&nbsp; 09:00</div>
+  </div>
+  <div id="objective" class="panel">
+    <div class="mission-name">FREE ROAM</div>
+    <div class="mission-text">Explore Solmar Bay</div>
+    <div class="mission-dist"></div>
+  </div>
+  <div id="bottom-left" class="panel">
+    <div id="health-row"><span id="health-label">HEALTH</span>
+      <div id="health-bar-outer"><div id="health-bar"></div></div></div>
+    <div id="car-health-row" style="display:none"><span id="car-health-label">CAR</span>
+      <div id="car-health-bar-outer"><div id="car-health-bar"></div></div></div>
+    <div id="ammo-row">PISTOL &nbsp;∞</div>
+  </div>
+  <div id="bottom-right" class="panel" style="display:none">
+    <div id="speed">0 <small>MPH</small></div>
+    <div id="car-name">ON FOOT</div>
+  </div>
+  <div id="hint" class="panel" style="display:none"></div>
+  <div id="toast"></div>
+  <div id="crosshair"></div>
+  <div id="fps"></div>
+</div>
+<div id="vignette"></div>
+<div id="wasted"><div class="big">WASTED</div><div class="sub" id="wasted-sub"></div></div>
+
+<div id="menu" class="overlay">
+  <div class="menu-card">
+    <h1>SOLMAR BAY</h1>
+    <h2>NEON TIDE &nbsp;·&nbsp; AN OPEN-WORLD CRIME STORY</h2>
+    <p class="story">Dario Cruz came back to Solmar Bay with empty pockets and a fast right foot.
+      The city runs on sun, salt and stolen cars — and Rosa's garage pays cash for all three.
+      Drive the Neon Mile, outrun the Solmar Bay Police, and take the jobs nobody else will touch.</p>
+    <div class="controls">
+      <div><b>W A S D</b> — move / drive</div><div><b>Mouse drag</b> — look around</div>
+      <div><b>E</b> — enter / steal car</div><div><b>Shift</b> — sprint</div>
+      <div><b>Space</b> — handbrake</div><div><b>Click</b> — shoot pistol</div>
+      <div><b>R</b> — reload</div><div><b>Esc / P</b> — pause</div>
+      <div><b>M</b> — mute music</div><div><b>H</b> — toggle help</div>
+    </div>
+    <button class="btn" id="btn-new">NEW GAME</button>
+    <button class="btn secondary" id="btn-continue" style="display:none">CONTINUE</button>
+    <p style="font-size:12px;color:#8fb4d8;margin-top:14px">Five story missions · traffic &amp; pedestrians · wanted levels · police chases · saves survive reload</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="menu-card">
+    <h1 style="font-size:42px">PAUSED</h1>
+    <p class="story" id="pause-stats"></p>
+    <button class="btn" id="btn-resume">RESUME</button>
+    <button class="btn secondary" id="btn-save-quit">SAVE &amp; QUIT TO MENU</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
